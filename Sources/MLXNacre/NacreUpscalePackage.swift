@@ -40,19 +40,19 @@ public final class NacreUpscalePackage: ModelPackage {
             requirements: RequirementsManifest(
                 // Split footprint (engine 1.14), RE-BASELINED IN-APP (AB-T-0019, 2026-10-05): Nacre Demo, Release,
                 // ValidationHarness on the app's own MLXServeEngine (isolate, engine GPU pool cap 2 GB), M5 Max, idle box,
-                // tiled 128/32, RealSR Nikon_010 500×400 → 2000×1600, one fresh process per number. resident = post-load
-                // phys − app baseline (0.05 GB); activation = the KERNEL's lifetime phys peak (ledger_phys_footprint_peak)
-                // − post-load floor — the harness's 150 ms sampler under-read that peak by 0.2–0.45 GB on every run.
-                //   fp16 ×6: floor 0.42 GB (MLX active 0.33 GB = the weights), kernel peak 4.57–4.70 GB, run 9.7–10.9 s
-                //   fp32 ×3: floor 0.77–0.82 GB (MLX active 0.65 GB),           kernel peak 5.54–5.58 GB, run 13.4–14.5 s
-                // The v0.1.1 CLI split (0.80 + 3.85 / 1.05 + 4.5) had the right TOTAL but read "resident" after the run,
+                // RealSR Nikon_010 500×400 → 2000×1600, one fresh process per number. resident = post-load phys − app
+                // baseline (0.05 GB; MLX active = the weights exactly). Activation = the KERNEL's lifetime phys peak
+                // (ledger_phys_footprint_peak) − post-load floor — the harness's 150 ms sampler under-read it by 0.2–1.9 GB —
+                // declared as max × 1.2 + 256 MB (the image-fleet N6 convention). These rows are the DEFAULT tile (128);
+                // the activation follows the tile, so `NacreConfiguration.peakActivationBytesHint` declares every tile
+                // (table there) and wins over these rows.
+                //   fp16 ×6: floor 0.42 GB, kernel peak 4.57–4.70 GB (act ≤ 4.28 GB), run 9.7–10.9 s
+                //   fp32 ×3: floor 0.77–0.82 GB, kernel peak 5.54–5.58 GB (act ≤ 4.77 GB), run 13.4–14.5 s
+                // The v0.1.1 CLI split (0.80 + 3.85 / 1.05 + 4.5) had the right total but read "resident" after the run,
                 // folding in a 0.30–0.36 GB post-first-run residue that is not MLX memory (pool active == weights, cache 0).
-                // Declared at the measured MAX, never the median: v0.1.2 shipped fp16 4.25 GB from the first three runs
-                // and the next three reached 4.28 GB (run-to-run spread ~0.13 GB). The tile sets the activation, so it does
-                // not grow with the image.
                 footprints: [
-                    QuantFootprint(quant: .fp16, residentBytes: 400_000_000, peakActivationBytes: 4_300_000_000),
-                    QuantFootprint(quant: .fp32, residentBytes: 780_000_000, peakActivationBytes: 4_800_000_000),
+                    QuantFootprint(quant: .fp16, residentBytes: 400_000_000, peakActivationBytes: 5_400_000_000),
+                    QuantFootprint(quant: .fp32, residentBytes: 780_000_000, peakActivationBytes: 5_980_000_000),
                 ],
                 requiredBackends: [.metalGPU],
                 os: OSRequirement(minMacOS: SemanticVersion(major: 26, minor: 0, patch: 0)),
@@ -78,7 +78,7 @@ public final class NacreUpscalePackage: ModelPackage {
 
     public nonisolated var plannedQuant: Quant {
         if configuration.effectiveQuant == .fp32, let b = configuration.availableBudgetBytes,
-           b < NacreConfiguration.fp32MinBudgetBytes {
+           b < NacreConfiguration.fp32MinBudgetBytes(tile: configuration.tileSize ?? Nacre.defaultTile) {
             return .fp16
         }
         return configuration.effectiveQuant
@@ -231,10 +231,12 @@ public final class NacreUpscalePackage: ModelPackage {
 }
 
 extension NacreUpscalePackage {
-    /// Tile ≥ 16 LQ px and 0 ≤ overlap < tile / 2 (`Nacre.upscaleTiled`'s blend needs a non-overlapping core).
+    /// 16 ≤ tile ≤ 256 LQ px (the measured footprint envelope) and 0 ≤ overlap < tile / 2 (`Nacre.upscaleTiled`'s
+    /// blend needs a non-overlapping core).
     public nonisolated static func validateTiling(tile: Int, overlap: Int) throws {
-        guard tile >= 16, overlap >= 0, overlap * 2 < tile else {
-            throw NacreError.badInput("tiling: need tile ≥ 16 and 0 ≤ overlap < tile/2 (got tile \(tile), overlap \(overlap))")
+        guard tile >= 16, tile <= NacreConfiguration.maxTile, overlap >= 0, overlap * 2 < tile else {
+            throw NacreError.badInput("tiling: need 16 ≤ tile ≤ \(NacreConfiguration.maxTile) and 0 ≤ overlap < tile/2 "
+                                      + "(got tile \(tile), overlap \(overlap))")
         }
     }
 

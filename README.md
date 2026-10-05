@@ -21,7 +21,7 @@ let out = try await engine.run(ImageUpscaleRequest(image: png), package: id) as!
 ```
 
 **Defaults:** fp16 lane (every reduction in fp32 inside), tiled 128-px LQ tiles with 32-px overlap (peak memory is set
-by the tile — ~4.6 GB process peak at any size, measured in-app), fixed seed (reproducible). 500×400 → 2000×1600 in ~10 s on an M5 Max.
+by the tile, not the image — ~4.7 GB process peak at the default tile, measured in-app; declared per tile 64–256), fixed seed (reproducible). 500×400 → 2000×1600 in ~10 s on an M5 Max.
 
 **Generative caveat:** Nacre invents plausible detail. Like every generative upscaler measured, it can alter text that
 was already legible — route legible small text to a fidelity upscaler.

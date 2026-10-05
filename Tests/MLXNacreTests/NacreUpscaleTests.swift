@@ -42,6 +42,35 @@ struct NacreUpscaleTests {
         #expect(throws: (any Error).self) { try NacreUpscalePackage.validateTiling(tile: 128, overlap: 64) }
         #expect(throws: (any Error).self) { try NacreUpscalePackage.validateTiling(tile: 8, overlap: 0) }
         #expect(throws: (any Error).self) { try NacreUpscalePackage.validateTiling(tile: 128, overlap: -1) }
+        #expect(throws: (any Error).self) { try NacreUpscalePackage.validateTiling(tile: 320, overlap: 32) }
+        try NacreUpscalePackage.validateTiling(tile: NacreConfiguration.maxTile, overlap: 32)
+    }
+
+    /// The activation follows the tile: the default tile's hint IS the quant row, and the hint never shrinks as the
+    /// tile grows (a bigger tile admitted against the default's reserve is the under-declaration this exists to stop).
+    @Test func activationDeclaredPerTile() {
+        let rows = NacreUpscalePackage.manifest.requirements.footprints
+        for quant in [Quant.fp16, .fp32] {
+            let row = rows.first { $0.quant == quant }?.peakActivationBytes
+            #expect(NacreConfiguration(quant: quant).peakActivationBytesHint == row)
+            let ladder = [16, 64, 96, 128, 160, 192, 224, 256].map {
+                NacreConfiguration(quant: quant, tileSize: $0).peakActivationBytesHint ?? 0
+            }
+            #expect(ladder == ladder.sorted())
+            #expect(ladder[1] < ladder[3] && ladder[3] < ladder.last!)
+        }
+        #expect(NacreConfiguration(quant: .bf16).peakActivationBytesHint == NacreConfiguration().peakActivationBytesHint)
+    }
+
+    /// fp32's budget fallback follows the tile: 12 GB of headroom carries fp32 at tile 128 but not at 256.
+    @Test func fp32BudgetFallbackFollowsTheTile() {
+        var c = NacreConfiguration(quant: .fp32)
+        c.availableBudgetBytes = 12_000_000_000
+        #expect(NacreUpscalePackage(configuration: c).plannedQuant == .fp32)
+        c.tileSize = 256
+        #expect(NacreUpscalePackage(configuration: c).plannedQuant == .fp16)
+        c.availableBudgetBytes = 20_000_000_000
+        #expect(NacreUpscalePackage(configuration: c).plannedQuant == .fp32)
     }
 
     @Test func quantConfiguredAndBudgetAware() {
