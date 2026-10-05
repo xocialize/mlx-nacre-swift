@@ -35,6 +35,15 @@ struct NacreUpscaleTests {
         #expect((fp16?.peakActivationBytes ?? 0) < (fp32?.peakActivationBytes ?? 0))
     }
 
+    /// A bad tiling configuration must THROW: the tiler's precondition would take the host app down with it.
+    @Test func invalidTilingThrowsInsteadOfTrapping() throws {
+        try NacreUpscalePackage.validateTiling(tile: 128, overlap: 32)
+        try NacreUpscalePackage.validateTiling(tile: 64, overlap: 0)
+        #expect(throws: (any Error).self) { try NacreUpscalePackage.validateTiling(tile: 128, overlap: 64) }
+        #expect(throws: (any Error).self) { try NacreUpscalePackage.validateTiling(tile: 8, overlap: 0) }
+        #expect(throws: (any Error).self) { try NacreUpscalePackage.validateTiling(tile: 128, overlap: -1) }
+    }
+
     @Test func quantConfiguredAndBudgetAware() {
         let cfg: any PackageConfiguration = NacreConfiguration()
         #expect((cfg as? QuantConfigured)?.quant == .fp16)
