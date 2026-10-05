@@ -43,13 +43,15 @@ public final class NacreUpscalePackage: ModelPackage {
                 // tiled 128/32, RealSR Nikon_010 500×400 → 2000×1600, one fresh process per number. resident = post-load
                 // phys − app baseline (0.05 GB); activation = the KERNEL's lifetime phys peak (ledger_phys_footprint_peak)
                 // − post-load floor — the harness's 150 ms sampler under-read that peak by 0.2–0.45 GB on every run.
-                //   fp16 ×3: floor 0.42 GB (MLX active 0.33 GB = the weights), kernel peak 4.57–4.62 GB, run 9.7–10.0 s
-                //   fp32 ×2: floor 0.77–0.82 GB (MLX active 0.65 GB),           kernel peak 5.54–5.58 GB, run 13.4 s
+                //   fp16 ×6: floor 0.42 GB (MLX active 0.33 GB = the weights), kernel peak 4.57–4.70 GB, run 9.7–10.9 s
+                //   fp32 ×3: floor 0.77–0.82 GB (MLX active 0.65 GB),           kernel peak 5.54–5.58 GB, run 13.4–14.5 s
                 // The v0.1.1 CLI split (0.80 + 3.85 / 1.05 + 4.5) had the right TOTAL but read "resident" after the run,
                 // folding in a 0.30–0.36 GB post-first-run residue that is not MLX memory (pool active == weights, cache 0).
-                // The tile sets the activation, so it does not grow with the image.
+                // Declared at the measured MAX, never the median: v0.1.2 shipped fp16 4.25 GB from the first three runs
+                // and the next three reached 4.28 GB (run-to-run spread ~0.13 GB). The tile sets the activation, so it does
+                // not grow with the image.
                 footprints: [
-                    QuantFootprint(quant: .fp16, residentBytes: 400_000_000, peakActivationBytes: 4_250_000_000),
+                    QuantFootprint(quant: .fp16, residentBytes: 400_000_000, peakActivationBytes: 4_300_000_000),
                     QuantFootprint(quant: .fp32, residentBytes: 780_000_000, peakActivationBytes: 4_800_000_000),
                 ],
                 requiredBackends: [.metalGPU],
