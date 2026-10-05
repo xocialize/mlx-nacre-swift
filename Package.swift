@@ -17,9 +17,11 @@ let package = Package(
     ],
     products: [
         .library(name: "NacreMLX", targets: ["NacreMLX"]),
+        .library(name: "MLXNacre", targets: ["MLXNacre"]),
         .executable(name: "nacre-smoke", targets: ["NacreSmoke"]),   // CLI gate modes
     ],
     dependencies: [
+        .package(url: "https://github.com/xocialize/mlx-engine-swift", from: "0.63.0"),
         .package(url: "https://github.com/ml-explore/mlx-swift", from: "0.30.0"),
     ],
     targets: [
@@ -30,6 +32,30 @@ let package = Package(
                 .product(name: "MLXNN", package: "mlx-swift"),
                 .product(name: "MLXRandom", package: "mlx-swift"),
             ]
+        ),
+        // MLXEngine `imageUpscale` wrapper over the local core.
+        .target(
+            name: "MLXNacre",
+            dependencies: [
+                .product(name: "MLXToolKit", package: "mlx-engine-swift"),
+                "NacreMLX",
+                .product(name: "MLX", package: "mlx-swift"),
+                .product(name: "MLXNN", package: "mlx-swift"),
+            ],
+            swiftSettings: [.swiftLanguageMode(.v5)]
+        ),
+        .testTarget(
+            name: "MLXNacreTests",
+            dependencies: [
+                "MLXNacre",
+                "NacreMLX",
+                .product(name: "MLX", package: "mlx-swift"),
+                .product(name: "MLXToolKit", package: "mlx-engine-swift"),
+                .product(name: "MLXServeCore", package: "mlx-engine-swift"),
+                .product(name: "MLXServeConformance", package: "mlx-engine-swift"),
+                .product(name: "MLXServeConformanceNN", package: "mlx-engine-swift"),
+            ],
+            swiftSettings: [.swiftLanguageMode(.v5)]   // the loaded MLX graphs are not Sendable-audited (C14 walker)
         ),
         .testTarget(
             name: "NacreMLXTests",
@@ -43,8 +69,11 @@ let package = Package(
             name: "NacreSmoke",
             dependencies: [
                 "NacreMLX",
+                "MLXNacre",
                 .product(name: "MLX", package: "mlx-swift"),
                 .product(name: "MLXNN", package: "mlx-swift"),
+                .product(name: "MLXToolKit", package: "mlx-engine-swift"),
+                .product(name: "MLXServeCore", package: "mlx-engine-swift"),
             ],
             path: "Sources/Smoke",
             swiftSettings: [.swiftLanguageMode(.v5)]

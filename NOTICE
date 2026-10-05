@@ -1,0 +1,10 @@
+Nacre v1
+Copyright 2026 Xocialize. Licensed under the Apache License, Version 2.0 (see LICENSE).
+
+This distribution includes the VQ-f4 autoencoder weights from CompVis latent-diffusion
+(https://github.com/CompVis/latent-diffusion), released under the MIT License:
+  Copyright (c) 2022 Machine Vision and Learning Group, LMU Munich
+
+The denoiser was trained on images from Wikimedia Commons under CC0, public-domain and
+Creative Commons Attribution licences. Each training image, its licence and its author are
+listed in ATTRIBUTION.csv.

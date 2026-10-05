@@ -180,12 +180,16 @@ case "tiled":
     let lq = try readImage(URL(fileURLWithPath: a[0]))
     Memory.peakMemory = 0
     let t = Date()
-    let out = nacre.upscaleTiled(lq, tile: opt("--tile", 128), overlap: opt("--overlap", 32))
+    let out = nacre.upscaleTiled(lq, tile: opt("--tile", 128), overlap: opt("--overlap", 32))  // defaults = Nacre.default*
     eval(out)
     try writePNG(out, URL(fileURLWithPath: a[1]))
     print(String(format: "  tiled %@ tile %d/%d  %d×%d → %d×%d  %.2f s  MLX peak %.2f GB", half ? "fp16" : "fp32",
                  opt("--tile", 128), opt("--overlap", 32), lq.dim(2), lq.dim(1), out.dim(2), out.dim(1),
                  Date().timeIntervalSince(t), Double(Memory.peakMemory) / 1e9))
+case "engine":
+    try await runEngine(Array(args.dropFirst()))
+case "cancel":
+    try await runCancel(Array(args.dropFirst()))
 case "gate", "gate-gpu":
     let cases = args.dropFirst().filter { !$0.hasPrefix("-") }
     for c in (cases.isEmpty ? ["s64", "s128"] : Array(cases)) { try parityGate(c, gpu: args.first == "gate-gpu") }

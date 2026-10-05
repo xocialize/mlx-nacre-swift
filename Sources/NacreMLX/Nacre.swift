@@ -156,11 +156,18 @@ extension Nacre {
     /// overlap (weights sum to 1 everywhere). The ResShift recipe (its inference chops the LQ the same way); peak memory
     /// is set by the tile, not the image. Each tile draws its own noise from `seed` mixed with the tile's origin, so a
     /// given (image, seed, tiling) is reproducible. Images no larger than one tile take the whole-image path.
-    public func upscaleTiled(_ lq01: MLXArray, tile: Int = 128, overlap: Int = 32, seed: UInt64 = 20260923,
+    public static let defaultTile = 128
+    public static let defaultOverlap = 32
+
+    /// `onProgress(tile, tiles, step, steps)` fires after every diffusion step of every tile (1-based tile index).
+    public func upscaleTiled(_ lq01: MLXArray, tile: Int = Nacre.defaultTile, overlap: Int = Nacre.defaultOverlap,
+                             seed: UInt64 = 20260923,
                              checkpoint: (() throws -> Void)? = nil,
-                             onTile: ((Int, Int) -> Void)? = nil) rethrows -> MLXArray {
+                             onProgress: ((Int, Int, Int, Int) -> Void)? = nil) rethrows -> MLXArray {
         let (h, w) = (lq01.dim(1), lq01.dim(2))
-        if h <= tile && w <= tile { return try upscale(lq01, seed: seed, checkpoint: checkpoint) }
+        if h <= tile && w <= tile {
+            return try upscale(lq01, seed: seed, checkpoint: checkpoint, onStep: { onProgress?(1, 1, $0, $1) })
+        }
         precondition(overlap * 2 < tile, "overlap must be < tile/2")
         func starts(_ n: Int) -> [Int] {
             if n <= tile { return [0] }
@@ -179,7 +186,9 @@ extension Nacre {
                 let th = min(tile, h - y), tw = min(tile, w - x)
                 let lq = lq01[0..., y ..< (y + th), x ..< (x + tw), 0...]
                 let tileSeed = seed &+ UInt64(y) &* 0x9E37_79B9 &+ UInt64(x) &* 0x85EB_CA6B
-                let out = try upscale(lq, seed: tileSeed, checkpoint: checkpoint)
+                let index = done + 1
+                let out = try upscale(lq, seed: tileSeed, checkpoint: checkpoint,
+                                      onStep: { onProgress?(index, total, $0, $1) })
                 // ramp weights: 1 in the interior, linear to ~0 across each overlap that touches a neighbour
                 let wy = Self.ramp(th * s, lead: y > 0 ? overlap * s : 0, trail: y + th < h ? overlap * s : 0)
                 let wx = Self.ramp(tw * s, lead: x > 0 ? overlap * s : 0, trail: x + tw < w ? overlap * s : 0)
@@ -192,7 +201,6 @@ extension Nacre {
                 eval(acc, wsum)
                 Memory.clearCache()
                 done += 1
-                onTile?(done, total)
                 try checkpoint?()
             }
         }

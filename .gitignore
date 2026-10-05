@@ -2,3 +2,4 @@ oracle/weights/
 oracle/goldens/
 .build/
 .swiftpm/
+oracle/hub/
