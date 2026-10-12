@@ -23,6 +23,9 @@ let package = Package(
     dependencies: [
         .package(url: "https://github.com/xocialize/mlx-engine-swift", from: "0.63.0"),
         .package(url: "https://github.com/ml-explore/mlx-swift", from: "0.30.0"),
+        // ≥ 0.1.1: the SwinUNet's 6-channel input conv never reaches mlx 0.32.2's channel-pad helper, which frees a
+        // buffer the GPU still reads (AB-T-0214).
+        .package(url: "https://github.com/xocialize/mlx-exact-conv-swift", from: "0.1.1"),
     ],
     targets: [
         .target(
@@ -31,6 +34,7 @@ let package = Package(
                 .product(name: "MLX", package: "mlx-swift"),
                 .product(name: "MLXNN", package: "mlx-swift"),
                 .product(name: "MLXRandom", package: "mlx-swift"),
+                .product(name: "MLXExactConv", package: "mlx-exact-conv-swift"),
             ]
         ),
         // MLXEngine `imageUpscale` wrapper over the local core.
@@ -63,6 +67,7 @@ let package = Package(
                 "NacreMLX",
                 .product(name: "MLX", package: "mlx-swift"),
                 .product(name: "MLXNN", package: "mlx-swift"),
+                .product(name: "MLXExactConv", package: "mlx-exact-conv-swift"),
             ]
         ),
         .executableTarget(

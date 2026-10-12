@@ -5,6 +5,7 @@
 // reproduce the checkpoint's parameter paths, so the release loads with 0 missing / 0 unused keys (S0).
 import Foundation
 import MLX
+import MLXExactConv
 import MLXNN
 
 // MARK: - protocol for the timestep-conditioned sequential
@@ -352,8 +353,12 @@ public final class SwinUNet: Module {
         _timeEmbed.wrappedValue = [Linear(mc, ted), SiLUBox(), Linear(ted, ted)]
 
         var ch = cfg.channelMult[0] * mc
-        var input: [[Module]] = [[Conv2d(inputChannels: 2 * cfg.inChannels, outputChannels: ch, kernelSize: 3,
-                                         padding: 1)]]
+        // Routed (AB-T-0214): the input conv reads the latent and the LQ image stacked (2 × 3 = 6 channels), a stride-1
+        // 3×3 conv mlx 0.32.2 serves with `pad_in_channels_conv_2D_gpu`, which frees its zero fill value while the GPU
+        // still reads it; under a capped buffer cache (the Image Engine's 2 GiB) the process dies with "Invalid
+        // Resource". `RoutedConv2d` pads the channels in the graph instead (same `weight` / `bias` keys).
+        var input: [[Module]] = [[RoutedConv2d(inputChannels: 2 * cfg.inChannels, outputChannels: ch, kernelSize: 3,
+                                               padding: 1)]]
         var chans = [ch]
         var ds = cfg.imageSize
         for (level, mult) in cfg.channelMult.enumerated() {

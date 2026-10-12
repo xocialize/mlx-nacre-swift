@@ -40,3 +40,14 @@ A sub-native `scale` (×2 from the native ×4: the Image Engine's `nacre-upscale
 - **Test:** `resizeStaysRegisteredAcrossTheFrame` (blocks near both corners and the centre) failed on the old draw (4.26
   for 4.00) and passes here.
 - **Unchanged:** native-scale outputs.
+
+## Off mlx's channel-pad helper (0.1.6)
+
+The SwinUNet's input conv (latent + LQ stacked, 6 → 160 channels, 3×3) is a `RoutedConv2d` now (AB-T-0214).
+- **The defect:** mlx 0.32.2 serves a stride-1 conv2d with 5+ input channels that aren't a multiple of 16 through
+  `pad_in_channels_conv_2D_gpu`. That helper frees its zero fill value while the GPU still reads it. Under a capped
+  buffer cache (the Image Engine's 2 GiB) the process can die with `Invalid Resource`. Nacre took it once per denoise
+  step per tile, 100 times per 512² job.
+- **Now:** ExactConv pads the channels to 16 in the graph.
+- **Same output:** a Release Image Engine build gave byte-identical ×4, ×2 and text-guarded ×2 outputs against 0.1.5.
+- **Test:** `testInputConvIsRoutedOffThePadHelper` (GPU against a CPU conv).
