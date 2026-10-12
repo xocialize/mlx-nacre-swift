@@ -29,3 +29,14 @@ was already legible — route legible small text to a fidelity upscaler.
 Weights: `xocialize/nacre-v1-mlx` (MLX layout, fp16 + fp32 lanes), materialised by the engine on first use. Parity,
 measurements and decisions: [PORTING-SPEC.md](PORTING-SPEC.md). Licence: Apache-2.0 (see NOTICE for the CompVis MIT
 autoencoder and the training-image attributions).
+
+## Sub-native scale is a Lanczos reduction (0.1.5)
+
+A sub-native `scale` (×2 from the native ×4: the Image Engine's `nacre-upscale` at ×2) is now a vImage Lanczos reduction (AB-T-0232; the AB-T-0225 fix in mlx-realplksr-swift / mlx-heart-swift 0.2.1).
+- **The defect:** the CoreGraphics `.high` draw it replaces sampled on a corner-aligned grid. A reduction drifted
+  ±0.26 px from the centre toward the edges.
+- **What it cost** RealPLKSR and HEART at ×2: 1.7–2.8 dB on drawn content, ~0.2 dB on photos (AB-R-0502).
+- **Where it applied here:** ×2 through the Image Engine (`nacre-upscale`, by name, at best) — a served route. The reduction is the byte-level `reduceRGBA8`, tested without MLX evaluation.
+- **Test:** `resizeStaysRegisteredAcrossTheFrame` (blocks near both corners and the centre) failed on the old draw (4.26
+  for 4.00) and passes here.
+- **Unchanged:** native-scale outputs.

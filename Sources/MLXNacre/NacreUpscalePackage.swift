@@ -1,4 +1,5 @@
 // Copyright 2026 Xocialize. Licensed under the Apache License, Version 2.0.
+import Accelerate
 import CoreGraphics
 import CoreImage
 import Foundation
@@ -214,19 +215,30 @@ public final class NacreUpscalePackage: ModelPackage {
         return Image.rawBGRA8(data: Data(bgra), width: w, height: h)
     }
 
-    /// High-quality downsample of the 4× result to `w`×`h` (CoreGraphics, high interpolation).
+    /// Lanczos downsample of the 4× result to `w`×`h` (`reduceRGBA8`).
     nonisolated static func downsample(_ x: MLXArray, toWidth w: Int, height h: Int) -> MLXArray {
-        var (bytes, sw, sh) = rgba8(x)
-        let space = CGColorSpace(name: CGColorSpace.sRGB)!
-        let info = CGImageAlphaInfo.noneSkipLast.rawValue
-        guard let src = CGContext(data: &bytes, width: sw, height: sh, bitsPerComponent: 8, bytesPerRow: sw * 4,
-                                  space: space, bitmapInfo: info)?.makeImage() else { return x }
-        var out = [UInt8](repeating: 0, count: w * h * 4)
-        guard let ctx = CGContext(data: &out, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w * 4,
-                                  space: space, bitmapInfo: info) else { return x }
-        ctx.interpolationQuality = .high
-        ctx.draw(src, in: CGRect(x: 0, y: 0, width: w, height: h))
+        let (bytes, sw, sh) = rgba8(x)
+        guard let out = reduceRGBA8(bytes, width: sw, height: sh, toWidth: w, height: h) else { return x }
         return MLXArray(out, [1, h, w, 4]).asType(.float32)[0..., 0..., 0..., 0 ..< 3] / 255
+    }
+
+    /// The byte-level reduction behind `downsample`: tightly packed RGBX8 `sw`×`sh` → `w`×`h`, vImage's Lanczos
+    /// (AB-T-0232, the AB-T-0225 fix). The CoreGraphics `.high` draw this replaces sampled on a corner-aligned grid, so
+    /// a reduction drifted ±0.26 px from the centre to the edges (AB-R-0502); vImage's Lanczos matches PIL's to 0.02 dB.
+    nonisolated static func reduceRGBA8(_ src: [UInt8], width sw: Int, height sh: Int, toWidth w: Int, height h: Int) -> [UInt8]? {
+        guard w > 0, h > 0, src.count >= sw * sh * 4 else { return nil }
+        var input = src
+        var out = [UInt8](repeating: 0, count: w * h * 4)
+        let err = input.withUnsafeMutableBytes { s in
+            out.withUnsafeMutableBytes { d in
+                var sb = vImage_Buffer(data: s.baseAddress, height: vImagePixelCount(sh), width: vImagePixelCount(sw),
+                                       rowBytes: sw * 4)
+                var db = vImage_Buffer(data: d.baseAddress, height: vImagePixelCount(h), width: vImagePixelCount(w),
+                                       rowBytes: w * 4)
+                return vImageScale_ARGB8888(&sb, &db, nil, vImage_Flags(kvImageNoFlags))
+            }
+        }
+        return err == kvImageNoError ? out : nil
     }
 }
 
